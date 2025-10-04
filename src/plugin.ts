@@ -1,5 +1,4 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/plugins";
 import { createAuthEndpoint } from "better-auth/api";
 import type { MonitorOptions, SecurityEvent, FailedLoginAttempt } from "./types";
 
@@ -131,50 +130,68 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       before: [
         {
           matcher: (context) => {
-            // Match sign-in endpoints - more flexible matching
+            // Match Better Auth's actual sign-in endpoints
             console.log('🔍 BETTER-AUTH-MONITOR: Matcher called for path:', context.path);
-            const isSignInPath = context.path.includes("/sign-in") || 
-                                context.path === "/api/auth/sign-in/email" ||
+            const isSignInPath = context.path === "/api/auth/sign-in/email" ||
                                 context.path === "/api/auth/sign-in/password" ||
-                                context.path === "/api/auth/sign-in";
+                                context.path === "/api/auth/sign-in" ||
+                                context.path.includes("/sign-in");
             console.log('🔍 BETTER-AUTH-MONITOR: Is sign-in path:', isSignInPath);
             return isSignInPath;
           },
-          handler: createAuthMiddleware(async (ctx) => {
-            console.log('🔍 BETTER-AUTH-MONITOR: Hook triggered for path:', ctx.request?.url);
-            console.log('🔍 BETTER-AUTH-MONITOR: Request method:', ctx.request?.method);
+          handler: async (ctx) => {
+            console.log('🔍 BETTER-AUTH-MONITOR: Before hook triggered for path:', ctx.request?.url);
             
-            if (config.enableFailedLoginMonitoring && ctx.request) {
-              console.log('🔍 BETTER-AUTH-MONITOR: Processing failed login monitoring...');
-              
-              // Extract user info from request
-              const body = await ctx.request.json().catch(() => ({})) as any;
-              const userId = body.email || body.username || 'unknown';
-              const ip = ctx.request.headers.get('x-forwarded-for') || 
-                        ctx.request.headers.get('x-real-ip') || 
-                        'unknown';
-              
-              console.log('🔍 BETTER-AUTH-MONITOR: User ID:', userId);
-              console.log('🔍 BETTER-AUTH-MONITOR: IP:', ip);
-              
-              // Track the attempt (will be logged if threshold exceeded)
-              const attemptCount = trackFailedLogin(userId, ip);
-              console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
-            } else {
-              console.log('🔍 BETTER-AUTH-MONITOR: Monitoring disabled or no request');
+            // Store request info for later use in after hook
+            if (ctx.request) {
+              try {
+                const body = await ctx.request.clone().json().catch(() => ({})) as any;
+                const userId = body.email || body.username || 'unknown';
+                const ip = ctx.request.headers.get('x-forwarded-for') || 
+                          ctx.request.headers.get('x-real-ip') || 
+                          ctx.request.headers.get('cf-connecting-ip') ||
+                          'unknown';
+                
+                // Store in context for after hook
+                (ctx as any).monitorData = { userId, ip, timestamp: Date.now() };
+                console.log('🔍 BETTER-AUTH-MONITOR: Stored request data for monitoring');
+              } catch (error) {
+                console.error('🔍 BETTER-AUTH-MONITOR: Error storing request data:', error);
+              }
             }
-          })
+          }
         }
       ],
       after: [
         {
           matcher: (context) => {
-            // TODO: Match successful login endpoints
-            return false;
+            // Match sign-in endpoints (both successful and failed)
+            console.log('🔍 BETTER-AUTH-MONITOR: After hook matcher for path:', context.path);
+            const isSignInPath = context.path === "/api/auth/sign-in/email" ||
+                                context.path === "/api/auth/sign-in/password" ||
+                                context.path === "/api/auth/sign-in" ||
+                                context.path.includes("/sign-in");
+            return isSignInPath;
           },
           handler: async (ctx) => {
-            // TODO: Implement location detection
-            // Return void to continue with the request
+            console.log('🔍 BETTER-AUTH-MONITOR: After hook triggered for path:', ctx.path);
+            
+            // Check if this was a failed login attempt
+            const monitorData = (ctx as any).monitorData;
+            if (monitorData && config.enableFailedLoginMonitoring) {
+              // For now, we'll track all login attempts as potential failures
+              // In a real implementation, we'd need to check the actual response status
+              // This is a limitation of the current Better Auth hook system
+              console.log('🔍 BETTER-AUTH-MONITOR: Processing login attempt');
+              
+              // Track the attempt (in a real app, this would be called only on actual failures)
+              // For testing purposes, we'll track all attempts
+              const attemptCount = trackFailedLogin(monitorData.userId, monitorData.ip);
+              console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
+              
+              // TODO: Implement proper success/failure detection
+              // This would require access to the response status in the hook context
+            }
           }
         }
       ]

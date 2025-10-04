@@ -1,23 +1,21 @@
 /**
- * Simple Plugin Test - No Database Required
+ * Plugin Fix Verification Test
  * 
- * This test verifies the plugin works without requiring database initialization
+ * This test verifies that the plugin fixes work correctly
  */
 
+const { betterAuth } = require("better-auth");
 const { betterAuthMonitor } = require("../dist/plugin");
 
-console.log('🧪 Testing Plugin Without Database...\n');
+console.log('🔧 Verifying Plugin Fixes...\n');
 
-// Test 1: Plugin instantiation
+// Test 1: Check if plugin can be instantiated
 console.log('Test 1: Plugin Instantiation');
 try {
   const plugin = betterAuthMonitor({
     failedLoginThreshold: 3,
     failedLoginWindow: 5,
-    enableFailedLoginMonitoring: true,
-    logger: (event) => {
-      console.log('🚨 Security Event:', event);
-    }
+    enableFailedLoginMonitoring: true
   });
   
   console.log('✅ Plugin instantiated successfully');
@@ -26,14 +24,45 @@ try {
   console.log('   Has hooks:', !!plugin.hooks);
   console.log('   Has before hooks:', !!(plugin.hooks && plugin.hooks.before));
   console.log('   Has after hooks:', !!(plugin.hooks && plugin.hooks.after));
+} catch (error) {
+  console.log('❌ Plugin instantiation failed:', error.message);
+}
+
+// Test 2: Check if plugin can be added to Better Auth
+console.log('\nTest 2: Better Auth Integration');
+try {
+  const auth = betterAuth({
+    database: {
+      provider: "sqlite",
+      url: ":memory:"
+    },
+    emailAndPassword: {
+      enabled: true
+    },
+    plugins: [
+      betterAuthMonitor({
+        failedLoginThreshold: 3,
+        failedLoginWindow: 5,
+        enableFailedLoginMonitoring: true
+      })
+    ]
+  });
   
-  // Test hook structure
-  if (plugin.hooks) {
-    const beforeHooks = plugin.hooks.before || [];
-    const afterHooks = plugin.hooks.after || [];
+  console.log('✅ Better Auth instance created with plugin');
+  
+  // Check if plugin is loaded
+  const plugins = auth.plugins || [];
+  const monitorPlugin = plugins.find(p => p.id === 'better-auth-monitor');
+  
+  if (monitorPlugin) {
+    console.log('✅ Monitor plugin loaded in Better Auth');
     
-    console.log('   Before hooks count:', beforeHooks.length);
-    console.log('   After hooks count:', afterHooks.length);
+    // Test hook matchers
+    const beforeHooks = monitorPlugin.hooks?.before || [];
+    const afterHooks = monitorPlugin.hooks?.after || [];
+    
+    console.log('   Before hooks:', beforeHooks.length);
+    console.log('   After hooks:', afterHooks.length);
     
     // Test path matching
     const testPaths = [
@@ -60,43 +89,17 @@ try {
         console.log(`     ${path}: ${matches ? '✅' : '❌'}`);
       });
     });
+    
+  } else {
+    console.log('❌ Monitor plugin not found in Better Auth');
   }
   
 } catch (error) {
-  console.log('❌ Plugin instantiation failed:', error.message);
-  console.log('   Error details:', error);
+  console.log('❌ Better Auth integration failed:', error.message);
 }
 
-// Test 2: Test the tracking function directly
-console.log('\nTest 2: Direct Function Testing');
-try {
-  const plugin = betterAuthMonitor({
-    failedLoginThreshold: 2, // Lower threshold for testing
-    failedLoginWindow: 1,    // 1 minute for testing
-    enableFailedLoginMonitoring: true,
-    logger: (event) => {
-      console.log('🚨 SECURITY ALERT:', event);
-    }
-  });
-  
-  // Test the tracking function directly (if accessible)
-  console.log('✅ Plugin created for direct testing');
-  
-  // Simulate failed login attempts
-  console.log('\n   Simulating failed login attempts...');
-  const testUser = 'test@example.com';
-  const testIP = '192.168.1.100';
-  
-  // We can't directly access the internal tracking function,
-  // but we can test the plugin structure
-  console.log('   Plugin structure is valid');
-  
-} catch (error) {
-  console.log('❌ Direct function testing failed:', error.message);
-}
-
-// Test 3: Test endpoint structure
-console.log('\nTest 3: Endpoint Structure');
+// Test 3: Check endpoint creation
+console.log('\nTest 3: Endpoint Creation');
 try {
   const plugin = betterAuthMonitor();
   const endpoints = plugin.endpoints || {};
@@ -113,4 +116,4 @@ try {
   console.log('❌ Endpoint creation failed:', error.message);
 }
 
-console.log('\n🎉 Simple plugin test completed!');
+console.log('\n🎉 Plugin fix verification completed!');
