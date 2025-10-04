@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/plugins";
 import { createAuthEndpoint } from "better-auth/api";
-import type { MonitorOptions, SecurityEvent, FailedLoginAttempt } from "./types";
+import type { MonitorOptions, SecurityEvent, FailedLoginAttempt, LocationData, LocationAnomaly } from "./types";
+import { LocationDetectionService } from "./location-detection";
 
 /**
  * Better Auth Monitoring Plugin
@@ -21,6 +22,19 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     enableLocationDetection: true,
     enableFailedLoginMonitoring: true,
     enableBotDetection: true,
+    // Location detection defaults
+    maxNormalDistance: 1000,
+    locationAnomalyWindow: 24,
+    minLocationHistory: 3,
+    enableVpnDetection: true,
+    enableTorDetection: true,
+    enableSuspiciousCountryDetection: true,
+    suspiciousCountries: ['KP', 'IR', 'SY', 'CU', 'VE', 'MM', 'BY', 'RU', 'CN'],
+    enableImpossibleTravelDetection: true,
+    maxTravelSpeed: 900,
+    enableNewCountryDetection: true,
+    enableNewCityDetection: false,
+    enableTimezoneAnomalyDetection: true,
     ...options
   };
 
@@ -28,6 +42,9 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
   const failedLoginAttempts = new Map<string, FailedLoginAttempt[]>();
   const botActivity = new Map<string, any[]>();
   const userLocations = new Map<string, any>();
+  
+  // Initialize location detection service
+  const locationService = new LocationDetectionService(config);
 
   /**
    * Log security events
@@ -97,6 +114,68 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     return updatedAttempts.length;
   };
 
+  /**
+   * Handle location detection for successful logins
+   */
+  const handleLocationDetection = async (userId: string, ip: string) => {
+    if (!config.enableLocationDetection) {
+      console.log('🔍 BETTER-AUTH-MONITOR: Location detection disabled');
+      return;
+    }
+
+    try {
+      console.log('🔍 BETTER-AUTH-MONITOR: Starting location detection for user:', userId, 'IP:', ip);
+      
+      // Get location data for the IP
+      const locationData = await locationService.getLocationData(ip);
+      if (!locationData) {
+        console.log('🔍 BETTER-AUTH-MONITOR: Could not get location data for IP:', ip);
+        return;
+      }
+
+      console.log('🔍 BETTER-AUTH-MONITOR: Location data retrieved:', {
+        country: locationData.country,
+        city: locationData.city,
+        isVpn: locationData.isVpn,
+        isTor: locationData.isTor,
+        riskScore: locationData.riskScore
+      });
+
+      // Detect location anomalies
+      const anomalies = await locationService.detectLocationAnomalies(userId, locationData);
+      
+      if (anomalies.length > 0) {
+        console.log('🔍 BETTER-AUTH-MONITOR: Location anomalies detected:', anomalies.length);
+        
+        // Log each anomaly as a security event
+        for (const anomaly of anomalies) {
+          const event: SecurityEvent = {
+            type: anomaly.type as any,
+            userId,
+            timestamp: new Date().toISOString(),
+            ip,
+            locationData,
+            riskScore: anomaly.riskScore,
+            anomalyType: anomaly.type,
+            metadata: {
+              ...anomaly.metadata,
+              severity: anomaly.severity,
+              confidence: anomaly.confidence,
+              description: anomaly.description
+            }
+          };
+          
+          logSecurityEvent(event);
+        }
+      } else {
+        console.log('🔍 BETTER-AUTH-MONITOR: No location anomalies detected');
+      }
+      
+    } catch (error) {
+      console.error('🔍 BETTER-AUTH-MONITOR: Error in location detection:', error);
+    }
+  };
+
   return {
     id: "better-auth-monitor",
     
@@ -123,6 +202,42 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         }
         
         return ctx.json({ events });
+      }),
+
+      getLocationStats: createAuthEndpoint("/monitor/location-stats", {
+        method: "GET"
+      }, async (ctx) => {
+        // Return location monitoring statistics
+        const stats = {
+          totalUsers: locationService['userLocationHistory'].size,
+          suspiciousCountries: config.suspiciousCountries,
+          locationDetectionEnabled: config.enableLocationDetection,
+          vpnDetectionEnabled: config.enableVpnDetection,
+          torDetectionEnabled: config.enableTorDetection,
+          impossibleTravelDetectionEnabled: config.enableImpossibleTravelDetection,
+          newCountryDetectionEnabled: config.enableNewCountryDetection,
+          timezoneAnomalyDetectionEnabled: config.enableTimezoneAnomalyDetection
+        };
+        
+        return ctx.json({ stats });
+      }),
+
+      getUserLocationHistory: createAuthEndpoint("/monitor/user-locations/:userId", {
+        method: "GET"
+      }, async (ctx) => {
+        const userId = ctx.params.userId;
+        const userHistory = locationService['userLocationHistory'].get(userId);
+        
+        if (!userHistory) {
+          return ctx.json({ error: "User not found" }, { status: 404 });
+        }
+        
+        return ctx.json({ 
+          userId,
+          locations: userHistory.locations,
+          frequentLocations: userHistory.frequentLocations,
+          lastUpdated: userHistory.lastUpdated
+        });
       })
     },
 
@@ -169,11 +284,38 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       after: [
         {
           matcher: (context) => {
-            // TODO: Match successful login endpoints
-            return false;
+            // Match successful login endpoints
+            console.log('🔍 BETTER-AUTH-MONITOR: After hook matcher called for path:', context.path);
+            const isSignInPath = context.path.includes("/sign-in") || 
+                                context.path === "/api/auth/sign-in/email" ||
+                                context.path === "/api/auth/sign-in/password" ||
+                                context.path === "/api/auth/sign-in";
+            console.log('🔍 BETTER-AUTH-MONITOR: Is sign-in path (after):', isSignInPath);
+            return isSignInPath;
           },
           handler: async (ctx) => {
-            // TODO: Implement location detection
+            console.log('🔍 BETTER-AUTH-MONITOR: After hook triggered for successful login');
+            
+            if (config.enableLocationDetection && ctx.request) {
+              try {
+                // Extract user info from request
+                const body = await ctx.request.json().catch(() => ({})) as any;
+                const userId = body.email || body.username || 'unknown';
+                const ip = ctx.request.headers.get('x-forwarded-for') || 
+                          ctx.request.headers.get('x-real-ip') || 
+                          'unknown';
+                
+                console.log('🔍 BETTER-AUTH-MONITOR: Processing location detection for successful login');
+                console.log('🔍 BETTER-AUTH-MONITOR: User ID:', userId);
+                console.log('🔍 BETTER-AUTH-MONITOR: IP:', ip);
+                
+                // Handle location detection for successful login
+                await handleLocationDetection(userId, ip);
+              } catch (error) {
+                console.error('🔍 BETTER-AUTH-MONITOR: Error in after hook:', error);
+              }
+            }
+            
             // Return void to continue with the request
           }
         }
