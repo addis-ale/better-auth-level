@@ -52,14 +52,18 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
    * Track failed login attempt
    */
   const trackFailedLogin = (userId: string, ip: string) => {
+    console.log('🔍 BETTER-AUTH-MONITOR: trackFailedLogin called for user:', userId);
+    
     const now = Date.now();
     const windowMs = config.failedLoginWindow * 60 * 1000; // Convert minutes to ms
     
     // Get existing attempts for this user
     const existingAttempts = failedLoginAttempts.get(userId) || [];
+    console.log('🔍 BETTER-AUTH-MONITOR: Existing attempts:', existingAttempts.length);
     
     // Clean old attempts outside the window
     const recentAttempts = cleanOldAttempts(existingAttempts, windowMs);
+    console.log('🔍 BETTER-AUTH-MONITOR: Recent attempts after cleanup:', recentAttempts.length);
     
     // Add new attempt
     const newAttempt: FailedLoginAttempt = {
@@ -70,9 +74,13 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     
     const updatedAttempts = [...recentAttempts, newAttempt];
     failedLoginAttempts.set(userId, updatedAttempts);
+    console.log('🔍 BETTER-AUTH-MONITOR: Updated attempts:', updatedAttempts.length);
+    console.log('🔍 BETTER-AUTH-MONITOR: Threshold:', config.failedLoginThreshold);
     
     // Check if threshold exceeded
     if (updatedAttempts.length >= config.failedLoginThreshold) {
+      console.log('🔍 BETTER-AUTH-MONITOR: THRESHOLD EXCEEDED! Triggering security alert...');
+      
       const event: SecurityEvent = {
         type: 'failed_login',
         userId,
@@ -82,6 +90,8 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       };
       
       logSecurityEvent(event);
+    } else {
+      console.log('🔍 BETTER-AUTH-MONITOR: Threshold not exceeded yet');
     }
     
     return updatedAttempts.length;
@@ -127,7 +137,12 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
                    context.path === "/api/auth/sign-in/email";
           },
           handler: createAuthMiddleware(async (ctx) => {
+            console.log('🔍 BETTER-AUTH-MONITOR: Hook triggered for path:', ctx.request?.url);
+            console.log('🔍 BETTER-AUTH-MONITOR: Request method:', ctx.request?.method);
+            
             if (config.enableFailedLoginMonitoring && ctx.request) {
+              console.log('🔍 BETTER-AUTH-MONITOR: Processing failed login monitoring...');
+              
               // Extract user info from request
               const body = await ctx.request.json().catch(() => ({})) as any;
               const userId = body.email || body.username || 'unknown';
@@ -135,8 +150,14 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
                         ctx.request.headers.get('x-real-ip') || 
                         'unknown';
               
+              console.log('🔍 BETTER-AUTH-MONITOR: User ID:', userId);
+              console.log('🔍 BETTER-AUTH-MONITOR: IP:', ip);
+              
               // Track the attempt (will be logged if threshold exceeded)
-              trackFailedLogin(userId, ip);
+              const attemptCount = trackFailedLogin(userId, ip);
+              console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
+            } else {
+              console.log('🔍 BETTER-AUTH-MONITOR: Monitoring disabled or no request');
             }
           })
         }
