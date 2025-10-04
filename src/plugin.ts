@@ -122,9 +122,9 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         {
           matcher: (context) => {
             // Match sign-in endpoints
-            return context.path === "/api/auth/sign-in" || 
-                   context.path === "/api/auth/sign-in/email" ||
-                   context.path === "/api/auth/sign-in/password";
+            return context.path === "/api/auth/sign-in/email" ||
+                   context.path === "/api/auth/sign-in/password" ||
+                   context.path === "/api/auth/sign-in/email";
           },
           handler: createAuthMiddleware(async (ctx) => {
             if (config.enableFailedLoginMonitoring && ctx.request) {
