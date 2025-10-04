@@ -1,5 +1,5 @@
 // Main exports for the Better Auth Monitor plugin
-export { betterAuthMonitor } from "./plugin";
+export { betterAuthMonitor, trackFailedLoginManually } from "./plugin";
 export { betterAuthMonitorClient } from "./client-plugin";
 export type { 
   MonitorOptions, 
