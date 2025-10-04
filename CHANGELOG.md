@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.3] - 2025-01-04
+
+### Added
+- Enhanced debug logging for troubleshooting
+- Detailed console output to verify plugin hooks are working
+- Better error tracking and monitoring
+
+### Fixed
+- Improved endpoint path matching for Better Auth v1.x
+- Enhanced failed login detection with detailed logging
+
 ## [1.0.2] - 2025-01-04
 
 ### Fixed
