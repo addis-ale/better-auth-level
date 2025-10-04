@@ -1,6 +1,9 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { MonitorOptions } from "./types";
 
+// Type for the fetch function
+type FetchFunction = (url: string, options?: any) => Promise<any>;
+
 /**
  * Client-side plugin for Better Auth Monitor
  * 
@@ -14,28 +17,49 @@ export const betterAuthMonitorClient = (options: MonitorOptions = {}) => {
     $InferServerPlugin: {} as ReturnType<typeof import("./plugin").betterAuthMonitor>,
     
     // Client-side actions for monitoring
-    getActions: ($fetch) => {
+    getActions: ($fetch: FetchFunction) => {
       return {
-        // TODO: Add client actions for monitoring data
+        // Get security events
         getSecurityEvents: async (params: { limit?: number; type?: string }) => {
-          // TODO: Implement client action for fetching security events
           return $fetch("/monitor/events", {
             method: "GET",
             query: params
           });
         },
         
+        // Get monitoring statistics
         getMonitoringStats: async () => {
-          // TODO: Implement client action for monitoring statistics
           return $fetch("/monitor/stats", {
             method: "GET"
+          });
+        },
+
+        // Get location monitoring statistics
+        getLocationStats: async () => {
+          return $fetch("/monitor/location-stats", {
+            method: "GET"
+          });
+        },
+
+        // Get user location history
+        getUserLocationHistory: async (userId: string) => {
+          return $fetch(`/monitor/user-locations/${userId}`, {
+            method: "GET"
+          });
+        },
+
+        // Get location data for an IP (for testing)
+        getLocationData: async (ip: string) => {
+          return $fetch("/monitor/location-data", {
+            method: "POST",
+            body: { ip }
           });
         }
       };
     },
 
     // Client-side atoms for reactive monitoring
-    getAtoms: ($fetch) => {
+    getAtoms: ($fetch: FetchFunction) => {
       // TODO: Implement reactive atoms for monitoring state
       return {
         // securityEvents: atom([]),
@@ -46,7 +70,10 @@ export const betterAuthMonitorClient = (options: MonitorOptions = {}) => {
     // Override HTTP methods for monitoring endpoints
     pathMethods: {
       "/monitor/events": "GET",
-      "/monitor/stats": "GET"
+      "/monitor/stats": "GET",
+      "/monitor/location-stats": "GET",
+      "/monitor/user-locations/:userId": "GET",
+      "/monitor/location-data": "POST"
     }
   } satisfies BetterAuthClientPlugin;
 };
