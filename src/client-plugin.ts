@@ -16,19 +16,76 @@ export const betterAuthMonitorClient = (options: MonitorOptions = {}) => {
     // Client-side actions for monitoring
     getActions: ($fetch) => {
       return {
-        // TODO: Add client actions for monitoring data
+        // Get security events
         getSecurityEvents: async (params: { limit?: number; type?: string }) => {
-          // TODO: Implement client action for fetching security events
           return $fetch("/monitor/events", {
             method: "GET",
             query: params
           });
         },
         
+        // Get monitoring statistics
         getMonitoringStats: async () => {
-          // TODO: Implement client action for monitoring statistics
           return $fetch("/monitor/stats", {
             method: "GET"
+          });
+        },
+
+        // Trigger security actions (for developers)
+        triggerSecurityAction: async (params: {
+          userId: string;
+          actionType: 'enable_2fa' | 'reset_password' | 'security_alert' | 'account_lockout';
+          reason: string;
+          ip?: string;
+        }) => {
+          return $fetch("/monitor/trigger-action", {
+            method: "POST",
+            body: params
+          });
+        },
+
+        // Get user security actions
+        getUserSecurityActions: async (userId: string) => {
+          return $fetch("/monitor/user-actions", {
+            method: "GET",
+            query: { userId }
+          });
+        },
+
+        // Convenience methods for common security actions
+        enable2FA: async (userId: string, reason: string, ip?: string) => {
+          return $fetch("/monitor/trigger-action", {
+            method: "POST",
+            body: {
+              userId,
+              actionType: 'enable_2fa',
+              reason,
+              ip: ip || 'unknown'
+            }
+          });
+        },
+
+        resetPassword: async (userId: string, reason: string, ip?: string) => {
+          return $fetch("/monitor/trigger-action", {
+            method: "POST",
+            body: {
+              userId,
+              actionType: 'reset_password',
+              reason,
+              ip: ip || 'unknown'
+            }
+          });
+        },
+
+        sendSecurityAlert: async (userId: string, reason: string, ip?: string) => {
+          return $fetch("/monitor/trigger-action", {
+            method: "POST",
+            body: {
+              userId,
+              actionType: 'security_alert',
+              reason,
+              ip: ip || 'unknown'
+            }
           });
         }
       };
@@ -46,7 +103,9 @@ export const betterAuthMonitorClient = (options: MonitorOptions = {}) => {
     // Override HTTP methods for monitoring endpoints
     pathMethods: {
       "/monitor/events": "GET",
-      "/monitor/stats": "GET"
+      "/monitor/stats": "GET",
+      "/monitor/trigger-action": "POST",
+      "/monitor/user-actions": "GET"
     }
   } satisfies BetterAuthClientPlugin;
 };

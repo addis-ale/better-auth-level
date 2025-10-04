@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.1.0] - 2025-01-04
+
+### Added
+- **NEW**: Email notifications for security actions
+- **NEW**: Two-Factor Authentication (2FA) enforcement
+- **NEW**: Password reset enforcement
+- **NEW**: Developer API for triggering security actions
+- **NEW**: Security action tracking and management
+- **NEW**: Custom email templates for different security scenarios
+- **NEW**: Client-side methods for security actions
+- **NEW**: Comprehensive security action examples
+
+### Features
+- Automatic 2FA enforcement when suspicious activity is detected
+- Automatic password reset enforcement for compromised accounts
+- Customizable email templates for security notifications
+- Developer endpoints for manual security action triggers
+- Enhanced monitoring statistics including security actions
+- Integration with Better Auth's built-in 2FA and password reset
+
+### API Endpoints
+- `POST /api/auth/monitor/trigger-action` - Trigger security actions
+- `GET /api/auth/monitor/user-actions` - Get user security actions
+- `GET /api/auth/monitor/stats` - Get monitoring statistics
+
+### Client Methods
+- `enable2FA(userId, reason, ip?)` - Enable 2FA for user
+- `resetPassword(userId, reason, ip?)` - Reset user password
+- `sendSecurityAlert(userId, reason, ip?)` - Send security alert
+- `getUserSecurityActions(userId)` - Get user's security actions
+
 ## [1.0.3] - 2025-01-04
 
 ### Added

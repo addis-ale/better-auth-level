@@ -15,10 +15,12 @@ export interface MonitorOptions {
   enableBotDetection?: boolean;
   /** Custom logger function (optional) */
   logger?: (event: SecurityEvent) => void;
+  /** Security action options for 2FA and password reset */
+  securityActions?: SecurityActionOptions;
 }
 
 export interface SecurityEvent {
-  type: 'failed_login' | 'unusual_location' | 'bot_activity';
+  type: 'failed_login' | 'unusual_location' | 'bot_activity' | 'security_action_triggered';
   userId?: string;
   timestamp: string;
   ip: string;
@@ -26,6 +28,7 @@ export interface SecurityEvent {
   previousCountry?: string;
   currentCountry?: string;
   requestRate?: string;
+  action?: SecurityAction;
   metadata?: Record<string, any>;
 }
 
@@ -45,4 +48,44 @@ export interface UserLocation {
   userId: string;
   country: string;
   lastLogin: number;
+}
+
+export interface SecurityAction {
+  type: 'enable_2fa' | 'reset_password' | 'account_lockout' | 'security_alert';
+  userId: string;
+  reason: string;
+  timestamp: string;
+  ip: string;
+  emailSent?: boolean;
+  metadata?: Record<string, any>;
+}
+
+export interface EmailNotification {
+  to: string;
+  subject: string;
+  template: '2fa_setup' | 'password_reset' | 'security_alert' | 'account_lockout';
+  data: {
+    userName?: string;
+    resetUrl?: string;
+    totpUri?: string;
+    backupCodes?: string[];
+    reason?: string;
+    ip?: string;
+    timestamp?: string;
+  };
+}
+
+export interface SecurityActionOptions {
+  /** Enable 2FA enforcement for suspicious activity */
+  enable2FAEnforcement?: boolean;
+  /** Enable password reset enforcement for suspicious activity */
+  enablePasswordResetEnforcement?: boolean;
+  /** Custom email sending function */
+  sendEmail?: (notification: EmailNotification) => Promise<void>;
+  /** 2FA setup email template */
+  twoFactorEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
+  /** Password reset email template */
+  passwordResetEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
+  /** Security alert email template */
+  securityAlertEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
 }
