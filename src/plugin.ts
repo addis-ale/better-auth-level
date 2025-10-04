@@ -1,5 +1,4 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/plugins";
 import { createAuthEndpoint } from "better-auth/api";
 import type { MonitorOptions, SecurityEvent, FailedLoginAttempt } from "./types";
 
@@ -126,60 +125,42 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       })
     },
 
-    // Hooks for intercepting authentication events
-    hooks: {
-      before: [
-        {
-          matcher: (context) => {
-            // Match sign-in endpoints
-            return context.path === "/api/auth/sign-in/email" ||
-                   context.path === "/api/auth/sign-in/password" ||
-                   context.path === "/api/auth/sign-in/email";
-          },
-          handler: createAuthMiddleware(async (ctx) => {
-            console.log('🔍 BETTER-AUTH-MONITOR: Hook triggered for path:', ctx.request?.url);
-            console.log('🔍 BETTER-AUTH-MONITOR: Request method:', ctx.request?.method);
-            
-            if (config.enableFailedLoginMonitoring && ctx.request) {
-              console.log('🔍 BETTER-AUTH-MONITOR: Processing failed login monitoring...');
-              
-              // Extract user info from request
-              const body = await ctx.request.json().catch(() => ({})) as any;
-              const userId = body.email || body.username || 'unknown';
-              const ip = ctx.request.headers.get('x-forwarded-for') || 
-                        ctx.request.headers.get('x-real-ip') || 
-                        'unknown';
-              
-              console.log('🔍 BETTER-AUTH-MONITOR: User ID:', userId);
-              console.log('🔍 BETTER-AUTH-MONITOR: IP:', ip);
-              
-              // Track the attempt (will be logged if threshold exceeded)
-              const attemptCount = trackFailedLogin(userId, ip);
-              console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
-            } else {
-              console.log('🔍 BETTER-AUTH-MONITOR: Monitoring disabled or no request');
-            }
-          })
-        }
-      ],
-      after: [
-        {
-          matcher: (context) => {
-            // TODO: Match successful login endpoints
-            return false;
-          },
-          handler: async (ctx) => {
-            // TODO: Implement location detection
-            // Return void to continue with the request
-          }
-        }
-      ]
-    },
-
     // Monitor all requests for bot detection
     onRequest: async (request, ctx) => {
-      // TODO: Implement bot detection logic
-      // Return void to continue with the request
+      if (config.enableBotDetection) {
+        const ip = request.headers.get('x-forwarded-for') || 
+                  request.headers.get('x-real-ip') || 
+                  request.headers.get('cf-connecting-ip') ||
+                  'unknown';
+        
+        const now = Date.now();
+        const windowMs = config.botDetectionWindow * 1000; // Convert seconds to ms
+        
+        // Get existing bot activity for this IP
+        const existingActivity = botActivity.get(ip) || [];
+        
+        // Clean old activity outside the window
+        const recentActivity = existingActivity.filter(activity => 
+          now - activity.timestamp < windowMs
+        );
+        
+        // Add new activity
+        const newActivity = { timestamp: now, count: 1 };
+        const updatedActivity = [...recentActivity, newActivity];
+        botActivity.set(ip, updatedActivity);
+        
+        // Check if threshold exceeded
+        if (updatedActivity.length >= config.botDetectionThreshold) {
+          const event: SecurityEvent = {
+            type: 'bot_activity',
+            timestamp: new Date(now).toISOString(),
+            ip,
+            requestRate: `${updatedActivity.length} requests in ${config.botDetectionWindow}s`
+          };
+          
+          logSecurityEvent(event);
+        }
+      }
     },
 
     // Rate limiting for monitoring endpoints
@@ -189,6 +170,58 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         max: 100,
         window: 60
       }
-    ]
+    ],
+
   } satisfies BetterAuthPlugin;
+};
+
+/**
+ * Manual tracking function for failed logins
+ * Use this in your application code when you detect a failed login
+ */
+export const trackFailedLoginManually = (userId: string, ip: string, options: MonitorOptions = {}) => {
+  // Create a temporary plugin instance for tracking
+  const tempPlugin = betterAuthMonitor(options);
+  
+  // Access the internal tracking function
+  // This is a workaround since we can't expose it directly
+  console.log('🔍 BETTER-AUTH-MONITOR: Manual tracking called for user:', userId);
+  
+  // For now, we'll create a simple tracking mechanism
+  const now = Date.now();
+  const windowMs = (options.failedLoginWindow || 10) * 60 * 1000;
+  
+  // Use a global storage for manual tracking
+  if (!(globalThis as any)._manualFailedLogins) {
+    (globalThis as any)._manualFailedLogins = new Map();
+  }
+  
+  const existingAttempts = (globalThis as any)._manualFailedLogins.get(userId) || [];
+  const recentAttempts = existingAttempts.filter((attempt: any) => 
+    now - attempt.timestamp < windowMs
+  );
+  
+  const newAttempt = { timestamp: now, ip, userId };
+  const updatedAttempts = [...recentAttempts, newAttempt];
+  (globalThis as any)._manualFailedLogins.set(userId, updatedAttempts);
+  
+  const threshold = options.failedLoginThreshold || 5;
+  
+  if (updatedAttempts.length >= threshold) {
+    const event: SecurityEvent = {
+      type: 'failed_login',
+      userId,
+      timestamp: new Date(now).toISOString(),
+      ip,
+      attempts: updatedAttempts.length
+    };
+    
+    if (options.logger) {
+      options.logger(event);
+    } else {
+      console.log(`[BETTER-AUTH-MONITOR] ${JSON.stringify(event)}`);
+    }
+  }
+  
+  return updatedAttempts.length;
 };
