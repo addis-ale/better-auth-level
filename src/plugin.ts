@@ -142,22 +142,34 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
           handler: async (ctx) => {
             console.log('🔍 BETTER-AUTH-MONITOR: Before hook triggered for path:', ctx.request?.url);
             
-            // Store request info for later use in after hook
-            if (ctx.request) {
-              try {
-                const body = await ctx.request.clone().json().catch(() => ({})) as any;
-                const userId = body.email || body.username || 'unknown';
-                const ip = ctx.request.headers.get('x-forwarded-for') || 
-                          ctx.request.headers.get('x-real-ip') || 
-                          ctx.request.headers.get('cf-connecting-ip') ||
-                          'unknown';
-                
-                // Store in context for after hook
-                (ctx as any).monitorData = { userId, ip, timestamp: Date.now() };
-                console.log('🔍 BETTER-AUTH-MONITOR: Stored request data for monitoring');
-              } catch (error) {
-                console.error('🔍 BETTER-AUTH-MONITOR: Error storing request data:', error);
+            // Store basic request info for later use in after hook
+            // We'll use a simple approach that doesn't try to read the request body
+            try {
+              // Get IP address safely
+              let ip = 'unknown';
+              if (ctx.request && ctx.request.headers) {
+                try {
+                  ip = ctx.request.headers.get('x-forwarded-for') || 
+                       ctx.request.headers.get('x-real-ip') || 
+                       ctx.request.headers.get('cf-connecting-ip') ||
+                       'unknown';
+                } catch (headerError) {
+                  console.log('🔍 BETTER-AUTH-MONITOR: Could not read headers, using unknown IP');
+                  ip = 'unknown';
+                }
               }
+              
+              // Store minimal data for after hook
+              (ctx as any).monitorData = { 
+                userId: 'sign-in-attempt', // We'll track all sign-in attempts
+                ip, 
+                timestamp: Date.now() 
+              };
+              console.log('🔍 BETTER-AUTH-MONITOR: Stored request data for monitoring');
+            } catch (error) {
+              console.error('🔍 BETTER-AUTH-MONITOR: Error storing request data:', error);
+              // Store minimal data even if there's an error
+              (ctx as any).monitorData = { userId: 'unknown', ip: 'unknown', timestamp: Date.now() };
             }
           }
         }
@@ -176,21 +188,27 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
           handler: async (ctx) => {
             console.log('🔍 BETTER-AUTH-MONITOR: After hook triggered for path:', ctx.path);
             
-            // Check if this was a failed login attempt
-            const monitorData = (ctx as any).monitorData;
-            if (monitorData && config.enableFailedLoginMonitoring) {
-              // For now, we'll track all login attempts as potential failures
-              // In a real implementation, we'd need to check the actual response status
-              // This is a limitation of the current Better Auth hook system
-              console.log('🔍 BETTER-AUTH-MONITOR: Processing login attempt');
-              
-              // Track the attempt (in a real app, this would be called only on actual failures)
-              // For testing purposes, we'll track all attempts
-              const attemptCount = trackFailedLogin(monitorData.userId, monitorData.ip);
-              console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
-              
-              // TODO: Implement proper success/failure detection
-              // This would require access to the response status in the hook context
+            try {
+              // Check if this was a failed login attempt
+              const monitorData = (ctx as any).monitorData;
+              if (monitorData && config.enableFailedLoginMonitoring) {
+                // For now, we'll track all login attempts as potential failures
+                // In a real implementation, we'd need to check the actual response status
+                // This is a limitation of the current Better Auth hook system
+                console.log('🔍 BETTER-AUTH-MONITOR: Processing login attempt');
+                
+                // Track the attempt (in a real app, this would be called only on actual failures)
+                // For testing purposes, we'll track all attempts
+                const attemptCount = trackFailedLogin(monitorData.userId, monitorData.ip);
+                console.log('🔍 BETTER-AUTH-MONITOR: Current attempt count:', attemptCount);
+                
+                // TODO: Implement proper success/failure detection
+                // This would require access to the response status in the hook context
+              } else {
+                console.log('🔍 BETTER-AUTH-MONITOR: No monitor data or monitoring disabled');
+              }
+            } catch (error) {
+              console.error('🔍 BETTER-AUTH-MONITOR: Error in after hook:', error);
             }
           }
         }

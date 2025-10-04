@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.0.5] - 2025-01-04
+
+### Fixed
+- **CRITICAL**: Fixed `[TypeError: unusable]` error when reading request body
+- **CRITICAL**: Fixed `Cannot read properties of undefined (reading 'headers')` server error
+- Improved error handling for request body reading
+- Added safer approach to handle request headers
+- Plugin now works without trying to read request body (which was causing issues)
+- Enhanced error logging and debugging
+
+### Changed
+- Simplified request data collection to avoid body reading issues
+- Better error handling throughout the plugin
+- More robust IP address detection
+
+## [1.0.4] - 2025-01-04
+
+### Fixed
+- **CRITICAL**: Fixed plugin integration with Better Auth system
+- Removed invalid `createAuthMiddleware` import that was causing plugin failures
+- Fixed hook structure to use proper async functions instead of middleware wrappers
+- Corrected API path matching to use Better Auth's actual endpoints:
+  - `/api/auth/sign-in/email`
+  - `/api/auth/sign-in/password`
+  - `/api/auth/sign-in`
+- Fixed TypeScript errors with `ctx.response` access
+- Improved error handling and logging throughout the plugin
+- Fixed repository URL format for npm publishing
+
+### Changed
+- Plugin now properly integrates with Better Auth's hook system
+- Enhanced path matching accuracy for Better Auth endpoints
+- Improved error handling and debugging capabilities
+
 ## [1.0.3] - 2025-01-04
 
 ### Added
