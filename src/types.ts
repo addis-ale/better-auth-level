@@ -80,12 +80,6 @@ export interface SecurityActionOptions {
   enable2FAEnforcement?: boolean;
   /** Enable password reset enforcement for suspicious activity */
   enablePasswordResetEnforcement?: boolean;
-  /** Custom email sending function */
+  /** Custom email sending function - developer provides their own email service */
   sendEmail?: (notification: EmailNotification) => Promise<void>;
-  /** 2FA setup email template */
-  twoFactorEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
-  /** Password reset email template */
-  passwordResetEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
-  /** Security alert email template */
-  securityAlertEmailTemplate?: (data: EmailNotification['data']) => { subject: string; html: string; text: string };
 }

@@ -102,67 +102,41 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     logSecurityEvent(event);
 
     // Send email notification based on action type
-    let emailNotification: EmailNotification | null = null;
+    if (securityConfig.sendEmail) {
+      let subject = '';
+      let template: '2fa_setup' | 'password_reset' | 'security_alert' | 'account_lockout' = 'security_alert';
+      
+      switch (action.type) {
+        case 'enable_2fa':
+          subject = 'Security Alert: Enable Two-Factor Authentication';
+          template = '2fa_setup';
+          break;
+        case 'reset_password':
+          subject = 'Security Alert: Reset Your Password';
+          template = 'password_reset';
+          break;
+        case 'security_alert':
+          subject = 'Security Alert: Suspicious Activity Detected';
+          template = 'security_alert';
+          break;
+        case 'account_lockout':
+          subject = 'Account Security: Account Temporarily Locked';
+          template = 'account_lockout';
+          break;
+      }
 
-    switch (action.type) {
-      case 'enable_2fa':
-        emailNotification = {
-          to: action.userId, // Assuming userId is email for now
-          subject: 'Security Alert: Enable Two-Factor Authentication',
-          template: '2fa_setup',
-          data: {
-            userName: action.userId,
-            reason: action.reason,
-            ip: action.ip,
-            timestamp: securityAction.timestamp,
-          },
-        };
-        break;
+      const emailNotification: EmailNotification = {
+        to: action.userId, // Assuming userId is email for now
+        subject,
+        template,
+        data: {
+          userName: action.userId,
+          reason: action.reason,
+          ip: action.ip,
+          timestamp: securityAction.timestamp,
+        },
+      };
 
-      case 'reset_password':
-        emailNotification = {
-          to: action.userId, // Assuming userId is email for now
-          subject: 'Security Alert: Reset Your Password',
-          template: 'password_reset',
-          data: {
-            userName: action.userId,
-            reason: action.reason,
-            ip: action.ip,
-            timestamp: securityAction.timestamp,
-          },
-        };
-        break;
-
-      case 'security_alert':
-        emailNotification = {
-          to: action.userId, // Assuming userId is email for now
-          subject: 'Security Alert: Suspicious Activity Detected',
-          template: 'security_alert',
-          data: {
-            userName: action.userId,
-            reason: action.reason,
-            ip: action.ip,
-            timestamp: securityAction.timestamp,
-          },
-        };
-        break;
-
-      case 'account_lockout':
-        emailNotification = {
-          to: action.userId, // Assuming userId is email for now
-          subject: 'Account Security: Account Temporarily Locked',
-          template: 'account_lockout',
-          data: {
-            userName: action.userId,
-            reason: action.reason,
-            ip: action.ip,
-            timestamp: securityAction.timestamp,
-          },
-        };
-        break;
-    }
-
-    if (emailNotification) {
       await sendEmailNotification(emailNotification);
       securityAction.emailSent = true;
     }
