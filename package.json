@@ -1,12 +1,22 @@
 {
   "name": "better-auth-monitor",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Real-time monitoring plugin for Better Auth that detects suspicious authentication activities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "node test/run-test.js",
+    "test:server": "node test/simple-server.js",
+    "test:build": "npm run build && npm run test",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -19,14 +29,20 @@
     "bot-detection",
     "location-tracking"
   ],
-  "author": "Your Name",
+  "author": "Your Name <your.email@example.com>",
   "license": "MIT",
-  "dependencies": {
-    "better-auth": "^0.8.8"
+  "homepage": "https://github.com/yourusername/better-auth-monitor#readme",
+  "bugs": {
+    "url": "https://github.com/yourusername/better-auth-monitor/issues"
+  },
+  "peerDependencies": {
+    "better-auth": ">=0.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "express": "^4.18.0",
+    "cors": "^2.8.5"
   },
   "files": [
     "dist",

@@ -9,5 +9,8 @@ export type {
   UserLocation 
 } from "./types";
 
+// Import for default export
+import { betterAuthMonitor } from "./plugin";
+
 // Default export for convenience
 export default betterAuthMonitor;

@@ -1,0 +1,36 @@
+# Source files
+src/
+examples/
+test/
+
+# Development files
+tsconfig.json
+.gitignore
+
+# Build artifacts
+*.tsbuildinfo
+
+# Documentation (keep README.md)
+examples/
+test/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

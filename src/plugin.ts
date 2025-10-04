@@ -1,5 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
-import type { MonitorOptions, SecurityEvent } from "./types";
+import { createAuthMiddleware } from "better-auth/plugins";
+import { createAuthEndpoint } from "better-auth/api";
+import type { MonitorOptions, SecurityEvent, FailedLoginAttempt } from "./types";
 
 /**
  * Better Auth Monitoring Plugin
@@ -23,7 +25,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
   };
 
   // In-memory storage for tracking
-  const failedLoginAttempts = new Map<string, any[]>();
+  const failedLoginAttempts = new Map<string, FailedLoginAttempt[]>();
   const botActivity = new Map<string, any[]>();
   const userLocations = new Map<string, any>();
 
@@ -41,9 +43,48 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
   /**
    * Clean old attempts from storage
    */
-  const cleanOldAttempts = (attempts: any[], windowMs: number) => {
+  const cleanOldAttempts = (attempts: FailedLoginAttempt[], windowMs: number) => {
     const now = Date.now();
     return attempts.filter(attempt => now - attempt.timestamp < windowMs);
+  };
+
+  /**
+   * Track failed login attempt
+   */
+  const trackFailedLogin = (userId: string, ip: string) => {
+    const now = Date.now();
+    const windowMs = config.failedLoginWindow * 60 * 1000; // Convert minutes to ms
+    
+    // Get existing attempts for this user
+    const existingAttempts = failedLoginAttempts.get(userId) || [];
+    
+    // Clean old attempts outside the window
+    const recentAttempts = cleanOldAttempts(existingAttempts, windowMs);
+    
+    // Add new attempt
+    const newAttempt: FailedLoginAttempt = {
+      timestamp: now,
+      ip,
+      userId
+    };
+    
+    const updatedAttempts = [...recentAttempts, newAttempt];
+    failedLoginAttempts.set(userId, updatedAttempts);
+    
+    // Check if threshold exceeded
+    if (updatedAttempts.length >= config.failedLoginThreshold) {
+      const event: SecurityEvent = {
+        type: 'failed_login',
+        userId,
+        timestamp: new Date(now).toISOString(),
+        ip,
+        attempts: updatedAttempts.length
+      };
+      
+      logSecurityEvent(event);
+    }
+    
+    return updatedAttempts.length;
   };
 
   return {
@@ -51,7 +92,28 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     
     // Plugin endpoints for monitoring data
     endpoints: {
-      // TODO: Add endpoints for retrieving monitoring data
+      getSecurityEvents: createAuthEndpoint("/monitor/events", {
+        method: "GET"
+      }, async (ctx) => {
+        // Return recent security events (for demo purposes)
+        const events: SecurityEvent[] = [];
+        
+        // Collect failed login events
+        for (const [userId, attempts] of failedLoginAttempts.entries()) {
+          if (attempts.length >= config.failedLoginThreshold) {
+            const latestAttempt = attempts[attempts.length - 1];
+            events.push({
+              type: 'failed_login',
+              userId,
+              timestamp: new Date(latestAttempt.timestamp).toISOString(),
+              ip: latestAttempt.ip,
+              attempts: attempts.length
+            });
+          }
+        }
+        
+        return ctx.json({ events });
+      })
     },
 
     // Hooks for intercepting authentication events
@@ -59,13 +121,24 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       before: [
         {
           matcher: (context) => {
-            // TODO: Match login attempt endpoints
-            return false;
+            // Match sign-in endpoints
+            return context.path === "/api/auth/sign-in" || 
+                   context.path === "/api/auth/sign-in/email" ||
+                   context.path === "/api/auth/sign-in/password";
           },
-          handler: async (ctx) => {
-            // TODO: Implement failed login detection
-            // Return void to continue with the request
-          }
+          handler: createAuthMiddleware(async (ctx) => {
+            if (config.enableFailedLoginMonitoring && ctx.request) {
+              // Extract user info from request
+              const body = await ctx.request.json().catch(() => ({})) as any;
+              const userId = body.email || body.username || 'unknown';
+              const ip = ctx.request.headers.get('x-forwarded-for') || 
+                        ctx.request.headers.get('x-real-ip') || 
+                        'unknown';
+              
+              // Track the attempt (will be logged if threshold exceeded)
+              trackFailedLogin(userId, ip);
+            }
+          })
         }
       ],
       after: [
@@ -83,7 +156,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     },
 
     // Monitor all requests for bot detection
-    onRequest: async (request, context) => {
+    onRequest: async (request, ctx) => {
       // TODO: Implement bot detection logic
       // Return void to continue with the request
     },
