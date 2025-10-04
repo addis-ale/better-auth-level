@@ -131,10 +131,14 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       before: [
         {
           matcher: (context) => {
-            // Match sign-in endpoints
-            return context.path === "/api/auth/sign-in/email" ||
-                   context.path === "/api/auth/sign-in/password" ||
-                   context.path === "/api/auth/sign-in/email";
+            // Match sign-in endpoints - more flexible matching
+            console.log('🔍 BETTER-AUTH-MONITOR: Matcher called for path:', context.path);
+            const isSignInPath = context.path.includes("/sign-in") || 
+                                context.path === "/api/auth/sign-in/email" ||
+                                context.path === "/api/auth/sign-in/password" ||
+                                context.path === "/api/auth/sign-in";
+            console.log('🔍 BETTER-AUTH-MONITOR: Is sign-in path:', isSignInPath);
+            return isSignInPath;
           },
           handler: createAuthMiddleware(async (ctx) => {
             console.log('🔍 BETTER-AUTH-MONITOR: Hook triggered for path:', ctx.request?.url);

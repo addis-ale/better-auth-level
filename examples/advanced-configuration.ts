@@ -83,7 +83,7 @@ export const auth = betterAuth({
 });
 
 // Example: Custom middleware for additional security
-export const securityMiddleware = async (req: Request, res: Response, next: Function) => {
+export const securityMiddleware = async (req: any, res: any, next: Function) => {
   // Add custom security headers
   res.setHeader('X-Security-Monitor', 'enabled');
   res.setHeader('X-Content-Type-Options', 'nosniff');

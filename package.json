@@ -1,6 +1,6 @@
 {
   "name": "better-auth-monitor",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Real-time monitoring plugin for Better Auth that detects suspicious authentication activities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
