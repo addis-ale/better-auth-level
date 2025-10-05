@@ -68,19 +68,23 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
     if (securityConfig.sendEmail) {
       try {
         await securityConfig.sendEmail(notification);
-        console.log('🔍 BETTER-AUTH-MONITOR: Email sent successfully');
+        console.log("🔍 BETTER-AUTH-MONITOR: Email sent successfully");
       } catch (error) {
-        console.error('🔍 BETTER-AUTH-MONITOR: Failed to send email:', error);
+        console.error("🔍 BETTER-AUTH-MONITOR: Failed to send email:", error);
       }
     } else {
-      console.log('🔍 BETTER-AUTH-MONITOR: No email function configured, skipping email');
+      console.log(
+        "🔍 BETTER-AUTH-MONITOR: No email function configured, skipping email"
+      );
     }
   };
 
   /**
    * Create security action
    */
-  const createSecurityAction = async (action: Omit<SecurityAction, 'timestamp'>) => {
+  const createSecurityAction = async (
+    action: Omit<SecurityAction, "timestamp">
+  ) => {
     const securityAction: SecurityAction = {
       ...action,
       timestamp: new Date().toISOString(),
@@ -93,7 +97,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
 
     // Log the security event
     const event: SecurityEvent = {
-      type: 'security_action_triggered',
+      type: "security_action_triggered",
       userId: action.userId,
       timestamp: securityAction.timestamp,
       ip: action.ip,
@@ -103,25 +107,29 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
 
     // Send email notification based on action type
     if (securityConfig.sendEmail) {
-      let subject = '';
-      let template: '2fa_setup' | 'password_reset' | 'security_alert' | 'account_lockout' = 'security_alert';
-      
+      let subject = "";
+      let template:
+        | "2fa_setup"
+        | "password_reset"
+        | "security_alert"
+        | "account_lockout" = "security_alert";
+
       switch (action.type) {
-        case 'enable_2fa':
-          subject = 'Security Alert: Enable Two-Factor Authentication';
-          template = '2fa_setup';
+        case "enable_2fa":
+          subject = "Security Alert: Enable Two-Factor Authentication";
+          template = "2fa_setup";
           break;
-        case 'reset_password':
-          subject = 'Security Alert: Reset Your Password';
-          template = 'password_reset';
+        case "reset_password":
+          subject = "Security Alert: Reset Your Password";
+          template = "password_reset";
           break;
-        case 'security_alert':
-          subject = 'Security Alert: Suspicious Activity Detected';
-          template = 'security_alert';
+        case "security_alert":
+          subject = "Security Alert: Suspicious Activity Detected";
+          template = "security_alert";
           break;
-        case 'account_lockout':
-          subject = 'Account Security: Account Temporarily Locked';
-          template = 'account_lockout';
+        case "account_lockout":
+          subject = "Account Security: Account Temporarily Locked";
+          template = "account_lockout";
           break;
       }
 
@@ -207,7 +215,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
       // Trigger security actions based on configuration
       if (securityConfig.enable2FAEnforcement) {
         await createSecurityAction({
-          type: 'enable_2fa',
+          type: "enable_2fa",
           userId,
           reason: `Multiple failed login attempts detected (${updatedAttempts.length} attempts)`,
           ip,
@@ -216,7 +224,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
 
       if (securityConfig.enablePasswordResetEnforcement) {
         await createSecurityAction({
-          type: 'reset_password',
+          type: "reset_password",
           userId,
           reason: `Multiple failed login attempts detected (${updatedAttempts.length} attempts)`,
           ip,
@@ -225,7 +233,7 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
 
       // Always send a general security alert
       await createSecurityAction({
-        type: 'security_alert',
+        type: "security_alert",
         userId,
         reason: `Suspicious login activity detected (${updatedAttempts.length} failed attempts)`,
         ip,
@@ -242,6 +250,56 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
 
     // Plugin endpoints for monitoring data
     endpoints: {
+      // Report a failed login attempt and trigger security actions if threshold reached
+      reportFailedLogin: createAuthEndpoint(
+        "/monitor/failed-login",
+        {
+          method: "POST",
+        },
+        async (ctx) => {
+          try {
+            if (!ctx.request) {
+              return ctx.json(
+                {
+                  success: false,
+                  error: "Request not available",
+                },
+                { status: 400 }
+              );
+            }
+
+            const body = (await ctx.request.json()) as {
+              userId: string;
+              ip?: string;
+            };
+
+            const attemptCount = await trackFailedLogin(
+              body.userId,
+              body.ip || "unknown"
+            );
+
+            return ctx.json({
+              success: true,
+              attempts: attemptCount,
+              threshold: config.failedLoginThreshold,
+              message:
+                attemptCount >= config.failedLoginThreshold
+                  ? "Threshold reached; security actions evaluated."
+                  : "Failed login recorded.",
+            });
+          } catch (error) {
+            return ctx.json(
+              {
+                success: false,
+                error: "Failed to record failed login",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+              },
+              { status: 400 }
+            );
+          }
+        }
+      ),
       getSecurityEvents: createAuthEndpoint(
         "/monitor/events",
         {
@@ -278,15 +336,18 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         async (ctx) => {
           try {
             if (!ctx.request) {
-              return ctx.json({ 
-                success: false, 
-                error: 'Request not available' 
-              }, { status: 400 });
+              return ctx.json(
+                {
+                  success: false,
+                  error: "Request not available",
+                },
+                { status: 400 }
+              );
             }
-            
-            const body = await ctx.request.json() as {
+
+            const body = (await ctx.request.json()) as {
               userId: string;
-              actionType: SecurityAction['type'];
+              actionType: SecurityAction["type"];
               reason: string;
               ip?: string;
             };
@@ -295,20 +356,24 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
               type: body.actionType,
               userId: body.userId,
               reason: body.reason,
-              ip: body.ip || 'unknown',
+              ip: body.ip || "unknown",
             });
 
-            return ctx.json({ 
-              success: true, 
+            return ctx.json({
+              success: true,
               action,
-              message: `Security action '${body.actionType}' triggered for user ${body.userId}` 
+              message: `Security action '${body.actionType}' triggered for user ${body.userId}`,
             });
           } catch (error) {
-            return ctx.json({ 
-              success: false, 
-              error: 'Failed to trigger security action',
-              details: error instanceof Error ? error.message : 'Unknown error'
-            }, { status: 400 });
+            return ctx.json(
+              {
+                success: false,
+                error: "Failed to trigger security action",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+              },
+              { status: 400 }
+            );
           }
         }
       ),
@@ -322,33 +387,43 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         async (ctx) => {
           try {
             if (!ctx.request) {
-              return ctx.json({ 
-                success: false, 
-                error: 'Request not available' 
-              }, { status: 400 });
+              return ctx.json(
+                {
+                  success: false,
+                  error: "Request not available",
+                },
+                { status: 400 }
+              );
             }
-            
+
             const url = new URL(ctx.request.url);
-            const userId = url.searchParams.get('userId');
-            
+            const userId = url.searchParams.get("userId");
+
             if (!userId) {
-              return ctx.json({ 
-                success: false, 
-                error: 'userId parameter is required' 
-              }, { status: 400 });
+              return ctx.json(
+                {
+                  success: false,
+                  error: "userId parameter is required",
+                },
+                { status: 400 }
+              );
             }
 
             const userActions = securityActions.get(userId) || [];
-            return ctx.json({ 
-              success: true, 
-              actions: userActions 
+            return ctx.json({
+              success: true,
+              actions: userActions,
             });
           } catch (error) {
-            return ctx.json({ 
-              success: false, 
-              error: 'Failed to get user security actions',
-              details: error instanceof Error ? error.message : 'Unknown error'
-            }, { status: 500 });
+            return ctx.json(
+              {
+                success: false,
+                error: "Failed to get user security actions",
+                details:
+                  error instanceof Error ? error.message : "Unknown error",
+              },
+              { status: 500 }
+            );
           }
         }
       ),
@@ -361,11 +436,14 @@ export const betterAuthMonitor = (options: MonitorOptions = {}) => {
         },
         async (ctx) => {
           const stats = {
-            totalFailedLoginAttempts: Array.from(failedLoginAttempts.values())
-              .reduce((total, attempts) => total + attempts.length, 0),
+            totalFailedLoginAttempts: Array.from(
+              failedLoginAttempts.values()
+            ).reduce((total, attempts) => total + attempts.length, 0),
             usersWithFailedAttempts: failedLoginAttempts.size,
-            totalSecurityActions: Array.from(securityActions.values())
-              .reduce((total, actions) => total + actions.length, 0),
+            totalSecurityActions: Array.from(securityActions.values()).reduce(
+              (total, actions) => total + actions.length,
+              0
+            ),
             usersWithSecurityActions: securityActions.size,
             botActivityCount: botActivity.size,
             userLocationsCount: userLocations.size,
@@ -479,6 +557,29 @@ export const trackFailedLoginManually = (
       options.logger(event);
     } else {
       console.log(`[BETTER-AUTH-MONITOR] ${JSON.stringify(event)}`);
+    }
+
+    // Attempt to send email notifications using provided security actions
+    const actions = options.securityActions;
+    if (actions && actions.sendEmail) {
+      const subject = "Security Alert: Suspicious Activity Detected";
+      const emailNotification: EmailNotification = {
+        to: userId,
+        subject,
+        template: "security_alert",
+        data: {
+          userName: userId,
+          reason: `Multiple failed login attempts detected (${updatedAttempts.length} attempts)`,
+          ip,
+          timestamp: new Date(now).toISOString(),
+        },
+      };
+      actions.sendEmail(emailNotification).catch((err) => {
+        console.error(
+          "🔍 BETTER-AUTH-MONITOR: Failed to send email (manual):",
+          err
+        );
+      });
     }
   }
 
