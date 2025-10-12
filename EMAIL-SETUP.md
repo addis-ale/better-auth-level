@@ -291,3 +291,4 @@ If you're still having issues:
 5. Review the troubleshooting section above
 
 The email notification system is now fully functional and will send beautiful HTML emails for all security events!
+
